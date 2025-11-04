@@ -1,0 +1,8 @@
+# Ignore CMake build artifacts
+CMakeFiles/
+CMakeCache.txt
+Makefile
+cmake_install.cmake
+
+# Ignore compiled binary if produced locally
+code
