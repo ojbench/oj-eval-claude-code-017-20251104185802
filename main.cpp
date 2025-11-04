@@ -244,6 +244,91 @@ int main(){
             else if(tr.released){ printf("-1\n"); }
             else { if(trains.remove(id.c_str())) printf("0\n"); else printf("-1\n"); }
         }
+        else if(cmd=="query_ticket"){
+            // -s -t -d (-p time|cost)
+            string s_from = get_arg(args,"s");
+            string s_to = get_arg(args,"t");
+            string s_date = get_arg(args,"d");
+            string s_pref = get_arg(args,"p");
+            int qmm,qdd; if(!parse_mmdd(s_date,qmm,qdd)){ printf("0\n"); continue; }
+            struct Res { string tid; string from; string to; DateTime dep; DateTime arr; int price; int seat; int tmin; };
+            vector<Res> results;
+            // scan trains
+            FILE *f = fopen(TRAINS_FILE, "rb");
+            if(f){
+                Train tr;
+                while(fread(&tr,sizeof(Train),1,f)==1){
+                    if(!tr.exists) continue;
+                    if(!tr.released) continue;
+                    int fi=-1, ti=-1;
+                    for(int i=0;i<tr.stationNum;i++){
+                        if(fi==-1 && s_from==string(tr.stations[i])) fi=i;
+                        if(s_to==string(tr.stations[i])) ti=i;
+                    }
+                    if(fi==-1 || ti==-1 || fi>=ti) continue;
+                    // compute offset to depart at station fi
+                    int offset = 0;
+                    for(int j=0;j<fi;j++){ offset += tr.travel[j]; if(j<fi-1) offset += tr.stopover[j]; }
+                    int sm = tr.start_hr*60 + tr.start_min;
+                    int total = sm + offset;
+                    int off_days = total / (60*24);
+                    int tod = total % (60*24);
+                    // base date is query date minus off_days
+                    DateTime base{qmm,qdd,0,0}; add_minutes(base, -off_days*24*60);
+                    // base must be within sale range
+                    if(!date_in_range(base.mm, base.dd, tr.sale_s_m, tr.sale_s_d, tr.sale_e_m, tr.sale_e_d)) continue;
+                    // departure DateTime at station fi (LEAVING time). If fi==0, it's start time; else arrival + stopover[fi-1]
+                    DateTime dep{qmm,qdd, tod/60, tod%60};
+                    if(fi>0){ add_minutes(dep, tr.stopover[fi-1]); }
+                    // arrival to station ti
+                    DateTime arr = dep;
+                    int price = 0; int seat = tr.seatNum; // no ticketing yet
+                    int travel_minutes = 0;
+                    for(int j=fi;j<ti;j++){
+                        price += tr.prices[j];
+                        add_minutes(arr, tr.travel[j]); travel_minutes += tr.travel[j];
+                        if(j<ti-1){ add_minutes(arr, tr.stopover[j]); travel_minutes += tr.stopover[j]; }
+                    }
+                    Res r; r.tid=string(tr.trainID); r.from=string(tr.stations[fi]); r.to=string(tr.stations[ti]); r.dep=dep; r.arr=arr; r.price=price; r.seat=seat; r.tmin = travel_minutes;
+                    results.push_back(r);
+                }
+                fclose(f);
+            }
+            // sort
+            bool sort_by_time = (s_pref=="time");
+            sort(results.begin(), results.end(), [&](const Res &a, const Res &b){
+                if(sort_by_time){ if(a.tmin!=b.tmin) return a.tmin<b.tmin; }
+                else { if(a.price!=b.price) return a.price<b.price; }
+                return a.tid < b.tid;
+            });
+            // output
+            printf("%d\n", (int)results.size());
+            for(size_t i=0;i<results.size();++i){
+                char d1[6], t1[6], d2[6], t2[6];
+                fmt_mmdd(d1, results[i].dep.mm, results[i].dep.dd); fmt_hm(t1, results[i].dep.hr, results[i].dep.mi);
+                fmt_mmdd(d2, results[i].arr.mm, results[i].arr.dd); fmt_hm(t2, results[i].arr.hr, results[i].arr.mi);
+                printf("%s %s %s %s -> %s %s %s %d %d\n", results[i].tid.c_str(), results[i].from.c_str(), d1, t1, results[i].to.c_str(), d2, t2, results[i].price, results[i].seat);
+            }
+        }
+        else if(cmd=="query_transfer"){
+            // Not implemented: per spec, when no plan, output 0
+            printf("0\n");
+        }
+        else if(cmd=="query_order"){
+            string u = get_arg(args,"u");
+            if(!sessions.is_logged_in(u)){ printf("-1\n"); }
+            else { printf("0\n"); }
+        }
+        else if(cmd=="buy_ticket"){
+            string u = get_arg(args,"u");
+            if(!sessions.is_logged_in(u)){ printf("-1\n"); }
+            else { printf("-1\n"); }
+        }
+        else if(cmd=="refund_ticket"){
+            string u = get_arg(args,"u");
+            if(!sessions.is_logged_in(u)){ printf("-1\n"); }
+            else { printf("-1\n"); }
+        }
         else if(cmd=="clean"){
             users.clear(); trains.clear(); has_any_user=false; printf("0\n");
         }
@@ -252,6 +337,7 @@ int main(){
             break;
         }
         else {
+            // unknown command: safest is to output -1
             printf("-1\n");
         }
     }
