@@ -295,7 +295,7 @@ int main(){
                 fclose(f);
             }
             // sort
-            bool sort_by_time = (s_pref=="time");
+            bool sort_by_time = (s_pref.empty() || s_pref=="time");
             sort(results.begin(), results.end(), [&](const Res &a, const Res &b){
                 if(sort_by_time){ if(a.tmin!=b.tmin) return a.tmin<b.tmin; }
                 else { if(a.price!=b.price) return a.price<b.price; }
